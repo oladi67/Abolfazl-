@@ -1,3 +1,4 @@
+import os
 import time
 import random
 import numpy as np
@@ -9,39 +10,37 @@ from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 
-# اطلاعات ربات تلگرام
-TELEGRAM_TOKEN = '7597780702:AAFHOosF6-OGZMVQkz_quqEUv1ZgbXuW2Fk'
-CHAT_ID = '6723345169'
+# خواندن متغیرهای محیطی
+TELEGRAM_TOKEN = os.getenv("7597780702:AAFHOosF6-OGZMVQkz_quqEUv1ZgbXuW2Fk")
+CHAT_ID = os.getenv("6723345169")
+
+# لینک سایت بازی
+SITE_URL = 'https://bc.game/fa/game/crash'
 
 # تنظیمات WebDriver
 options = webdriver.ChromeOptions()
-options.add_argument("--headless")  # اجرا بدون نمایش مرورگر
+options.add_argument("--headless")  # اجرا بدون باز کردن مرورگر
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 driver = webdriver.Chrome(executable_path='/usr/lib/chromium-browser/chromedriver', options=options)
 
-# متغیر بررسی آماده بودن سایت
-SITE_URL = 'https://bc.game/fa/game/crash'
-READY = False
+# باز کردن سایت بازی BC.Game
+def open_site():
+    driver.get(SITE_URL)
+    print("سایت بازی باز شد. لطفاً وارد بازی شوید.")
 
-# تابع بررسی آماده بودن سایت
-def wait_for_site_ready():
-    global READY
-    while not READY:
+# بررسی ورود به بازی
+def wait_for_game():
+    while True:
         try:
-            print("در حال بررسی دسترسی به سایت...")
-            driver.get(SITE_URL)
-            time.sleep(5)  # توقف کوتاه برای بارگذاری سایت
-            # بررسی وجود یک عنصر خاص در صفحه
-            element = driver.find_element(By.ID, "game-multiplier")
-            if element:
-                READY = True
-                print("سایت آماده است، شروع به کار...")
-        except Exception as e:
-            print("سایت هنوز آماده نیست. تلاش مجدد...")
-            time.sleep(10)  # چند ثانیه دیگر صبر کنید
+            game_element = driver.find_element(By.CLASS_NAME, "game-crash")
+            print("شما وارد بازی شده‌اید. ربات شروع به کار می‌کند.")
+            return
+        except:
+            print("لطفاً وارد بازی شوید...")
+            time.sleep(5)
 
-# استخراج داده‌ها (ضریب‌ها)
+# استخراج داده‌ها
 def get_game_data():
     try:
         crash_multiplier = driver.find_element(By.ID, "game-multiplier").text
@@ -55,7 +54,7 @@ def send_to_telegram(message):
     bot = Bot(token=TELEGRAM_TOKEN)
     bot.send_message(chat_id=CHAT_ID, text=message)
 
-# پیش‌بینی ضریب با رگرسیون خطی
+# پیش‌بینی ضریب بعدی (رگرسیون خطی)
 def linear_regression_predict(data):
     if len(data) < 5:
         return random.uniform(0.1, 1000.0)
@@ -65,9 +64,9 @@ def linear_regression_predict(data):
     reg.fit(X, y)
     next_index = len(data)
     prediction = reg.predict([[next_index]])
-    return max(0.1, min(prediction[0][0], 1000.0))  # محدود کردن پیش‌بینی به بازه 0.1 تا 1000
+    return prediction[0][0]
 
-# پیش‌بینی ضریب با شبکه عصبی
+# پیش‌بینی ضریب بعدی (شبکه عصبی)
 def neural_network_predict(data):
     if len(data) < 5:
         return random.uniform(0.1, 1000.0)
@@ -83,19 +82,20 @@ def neural_network_predict(data):
     model.fit(X_scaled, y, epochs=200, batch_size=5, verbose=0)
     next_index = len(data)
     prediction = model.predict(scaler.transform([[next_index]]))
-    return max(0.1, min(prediction[0][0], 1000.0))  # محدود کردن پیش‌بینی به بازه 0.1 تا 1000
+    return prediction[0][0]
 
-# پیش‌بینی ضریب با میانگین متحرک
+# پیش‌بینی ضریب بعدی (میانگین متحرک)
 def predict_next_multiplier(data):
     if len(data) >= 5:
         avg = sum(data[-5:]) / 5
-        return max(0.1, min(avg + random.uniform(0, 0.5), 1000.0))  # محدود کردن پیش‌بینی به بازه 0.1 تا 1000
+        return avg + random.uniform(0, 0.5)
     else:
         return random.uniform(0.1, 1000.0)
 
-# اجرای برنامه اصلی
+# اجرای اصلی ربات
 def main():
-    wait_for_site_ready()  # صبر برای آماده شدن سایت
+    open_site()
+    wait_for_game()
     history = []
     while True:
         crash_multiplier = get_game_data()
@@ -105,4 +105,15 @@ def main():
             next_multiplier_linear = linear_regression_predict(history)
             next_multiplier_nn = neural_network_predict(history)
             next_multiplier_avg = predict_next_multiplier(history)
-            print(f"پیش‌بینی ضریب بعدی (رگرسیون خطی): {next_multiplier_linear
+            print(f"پیش‌بینی ضریب بعدی (رگرسیون خطی): {next_multiplier_linear}")
+            print(f"پیش‌بینی ضریب بعدی (شبکه عصبی): {next_multiplier_nn}")
+            print(f"پیش‌بینی ضریب بعدی (میانگین متحرک): {next_multiplier_avg}")
+            send_to_telegram(f"ضریب فعلی: {crash_multiplier}\n"
+                              f"پیش‌بینی ضریب بعدی (رگرسیون خطی): {next_multiplier_linear}\n"
+                              f"پیش‌بینی ضریب بعدی (شبکه عصبی): {next_multiplier_nn}\n"
+                              f"پیش‌بینی ضریب بعدی (میانگین متحرک): {next_multiplier_avg}")
+        time.sleep(random.choice([2, 3]))
+
+# اجرای کد
+if __name__ == "__main__":
+    main()
